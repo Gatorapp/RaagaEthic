@@ -1,0 +1,208 @@
+import { DatabaseSync } from "node:sqlite";
+import type { InsertOrder, InsertProduct, Order, Product } from "@shared/schema";
+
+const sqlite = new DatabaseSync("data.db");
+sqlite.exec("PRAGMA journal_mode = WAL");
+sqlite.exec(`
+CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  compare_at_price INTEGER,
+  images TEXT NOT NULL,
+  sizes TEXT NOT NULL,
+  color TEXT NOT NULL,
+  fabric TEXT NOT NULL,
+  sku TEXT NOT NULL UNIQUE,
+  stock INTEGER NOT NULL DEFAULT 0,
+  featured INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_number TEXT NOT NULL UNIQUE,
+  customer_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  address_line1 TEXT NOT NULL,
+  address_line2 TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  zip TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT 'US',
+  items TEXT NOT NULL,
+  subtotal INTEGER NOT NULL,
+  shipping INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  stripe_session_id TEXT,
+  created_at TEXT NOT NULL
+);
+`);
+
+const productSelect = `
+  SELECT id, name, slug, category, description, price,
+    compare_at_price AS compareAtPrice, images, sizes, color, fabric, sku, stock,
+    featured, active
+  FROM products
+`;
+
+const orderSelect = `
+  SELECT id, order_number AS orderNumber, customer_name AS customerName, email,
+    phone, address_line1 AS addressLine1, address_line2 AS addressLine2, city,
+    state, zip, country, items, subtotal, shipping, total, status,
+    stripe_session_id AS stripeSessionId, created_at AS createdAt
+  FROM orders
+`;
+
+function productRow(row: any): Product | undefined {
+  return row ? { ...row, featured: Boolean(row.featured), active: Boolean(row.active) } : undefined;
+}
+
+function orderRow(row: any): Order | undefined {
+  return row || undefined;
+}
+
+const productColumns: Record<keyof InsertProduct, string> = {
+  name: "name",
+  slug: "slug",
+  category: "category",
+  description: "description",
+  price: "price",
+  compareAtPrice: "compare_at_price",
+  images: "images",
+  sizes: "sizes",
+  color: "color",
+  fabric: "fabric",
+  sku: "sku",
+  stock: "stock",
+  featured: "featured",
+  active: "active",
+};
+
+export class DatabaseStorage {
+  async listProducts(options?: { category?: string; activeOnly?: boolean }): Promise<Product[]> {
+    const clauses: string[] = [];
+    const values: unknown[] = [];
+    if (options?.activeOnly) clauses.push("active = 1");
+    if (options?.category) {
+      clauses.push("category = ?");
+      values.push(options.category);
+    }
+    const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+    return sqlite
+      .prepare(`${productSelect}${where} ORDER BY id DESC`)
+      .all(...values)
+      .map((row: any) => productRow(row)!);
+  }
+
+  async getProduct(id: number) {
+    return productRow(sqlite.prepare(`${productSelect} WHERE id = ?`).get(id));
+  }
+
+  async getProductBySlug(slug: string) {
+    return productRow(sqlite.prepare(`${productSelect} WHERE slug = ?`).get(slug));
+  }
+
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const values = Object.keys(productColumns).map((key) => {
+      const value = product[key as keyof InsertProduct];
+      return typeof value === "boolean" ? Number(value) : value ?? null;
+    });
+    const columns = Object.values(productColumns);
+    const result = sqlite
+      .prepare(`INSERT INTO products (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`)
+      .run(...values);
+    return (await this.getProduct(Number(result.lastInsertRowid)))!;
+  }
+
+  async updateProduct(id: number, changes: Partial<InsertProduct>) {
+    const entries = Object.entries(changes).filter(([key]) => key in productColumns);
+    if (!entries.length) return this.getProduct(id);
+    const setters = entries.map(([key]) => `${productColumns[key as keyof InsertProduct]} = ?`);
+    const values = entries.map(([, value]) =>
+      typeof value === "boolean" ? Number(value) : value ?? null,
+    );
+    sqlite.prepare(`UPDATE products SET ${setters.join(", ")} WHERE id = ?`).run(...values, id);
+    return this.getProduct(id);
+  }
+
+  async deleteProduct(id: number) {
+    return sqlite.prepare("DELETE FROM products WHERE id = ?").run(id).changes > 0;
+  }
+
+  async decrementStock(id: number, quantity: number) {
+    sqlite
+      .prepare("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?")
+      .run(quantity, id);
+  }
+
+  async listOrders(): Promise<Order[]> {
+    return sqlite
+      .prepare(`${orderSelect} ORDER BY id DESC`)
+      .all()
+      .map((row: any) => orderRow(row)!);
+  }
+
+  async getOrder(id: number) {
+    return orderRow(sqlite.prepare(`${orderSelect} WHERE id = ?`).get(id));
+  }
+
+  async getOrderByStripeSessionId(sessionId: string) {
+    return orderRow(
+      sqlite.prepare(`${orderSelect} WHERE stripe_session_id = ?`).get(sessionId),
+    );
+  }
+
+  async createOrder(
+    order: InsertOrder & {
+      orderNumber: string;
+      stripeSessionId?: string;
+      createdAt: string;
+    },
+  ): Promise<Order> {
+    const result = sqlite
+      .prepare(`
+        INSERT INTO orders (
+          order_number, customer_name, email, phone, address_line1, address_line2,
+          city, state, zip, country, items, subtotal, shipping, total,
+          stripe_session_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        order.orderNumber,
+        order.customerName,
+        order.email,
+        order.phone,
+        order.addressLine1,
+        order.addressLine2,
+        order.city,
+        order.state,
+        order.zip,
+        order.country,
+        order.items,
+        order.subtotal,
+        order.shipping,
+        order.total,
+        order.stripeSessionId ?? null,
+        order.createdAt,
+      );
+    return (await this.getOrder(Number(result.lastInsertRowid)))!;
+  }
+
+  async updateOrderStatus(id: number, status: string) {
+    sqlite.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
+    return this.getOrder(id);
+  }
+
+  async setOrderStripeSession(id: number, sessionId: string) {
+    sqlite
+      .prepare("UPDATE orders SET stripe_session_id = ? WHERE id = ?")
+      .run(sessionId, id);
+  }
+}
+
+export const storage = new DatabaseStorage();
