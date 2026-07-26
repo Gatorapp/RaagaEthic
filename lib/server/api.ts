@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "raaga2026";
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 export function isAdmin(request: Request) {
-  return request.headers.get("x-admin-key") === ADMIN_PASSWORD;
+  return Boolean(ADMIN_PASSWORD) && request.headers.get("x-admin-key") === ADMIN_PASSWORD;
 }
 
 export function unauthorized() {

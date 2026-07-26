@@ -76,7 +76,11 @@ export default function CheckoutSuccess() {
             Thank you for your order!
           </h1>
           <p className="mt-2 text-sm text-muted-foreground" data-testid="text-order-number">
-            Order #{order?.orderNumber || orderNumber} has been confirmed. A receipt has been sent to your email.
+            Order #{order?.orderNumber || orderNumber} has been confirmed.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Stripe sends email receipts for live payments. Test-mode receipts are available in your Stripe Dashboard
+            and may only be emailed to verified test-team addresses.
           </p>
           {order && (
             <div className="mt-6 rounded-md border border-border bg-card p-4 text-left text-sm">
@@ -98,7 +102,7 @@ export default function CheckoutSuccess() {
           <h1 className="mt-4 font-serif text-2xl">Payment processing</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             We're still confirming your payment with Stripe. Order #{order?.orderNumber || orderNumber} will update
-            automatically once confirmed — check your email shortly.
+            automatically once confirmed.
           </p>
           <Link href="/shop">
             <Button className="mt-8" variant="outline">Back to Shop</Button>

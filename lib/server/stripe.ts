@@ -103,6 +103,10 @@ export async function createCheckoutSession(params: {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       customer_email: params.customerEmail,
+      payment_intent_data: {
+        receipt_email: params.customerEmail,
+        description: `Raaga Ethnic Couture order ${params.metadata.orderNumber}`,
+      },
       metadata: params.metadata,
     }).join("&"),
   });
