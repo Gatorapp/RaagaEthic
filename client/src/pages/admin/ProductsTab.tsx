@@ -98,7 +98,7 @@ function productToFormValues(p: Product): ProductFormValues {
 }
 
 export default function ProductsTab() {
-  const { adminKey } = useAdmin();
+  const { adminKey, isReady } = useAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -110,7 +110,7 @@ export default function ProductsTab() {
       const res = await apiRequest("GET", "/api/admin/products", undefined, { "x-admin-key": adminKey || "" });
       return res.json();
     },
-    enabled: !!adminKey,
+    enabled: isReady && !!adminKey,
   });
 
   const form = useForm<ProductFormValues>({
@@ -209,6 +209,23 @@ export default function ProductsTab() {
     },
   });
 
+  const submitProduct = form.handleSubmit((values) => {
+    saveMutation.mutate(values);
+  });
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void submitProduct(e);
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    const target = e.target as HTMLElement;
+    const isTextarea = target.tagName.toLowerCase() === "textarea";
+    if (e.key === "Enter" && !isTextarea) {
+      e.preventDefault();
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -295,7 +312,7 @@ export default function ProductsTab() {
             <DialogTitle>{editing ? "Edit Product" : "Add Product"}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
+            <form onSubmit={handleFormSubmit} onKeyDown={handleFormKeyDown} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}

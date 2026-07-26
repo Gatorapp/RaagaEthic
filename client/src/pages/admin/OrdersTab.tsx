@@ -33,7 +33,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 };
 
 export default function OrdersTab() {
-  const { adminKey } = useAdmin();
+  const { adminKey, isReady } = useAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -43,7 +43,7 @@ export default function OrdersTab() {
       const res = await apiRequest("GET", "/api/admin/orders", undefined, { "x-admin-key": adminKey || "" });
       return res.json();
     },
-    enabled: !!adminKey,
+    enabled: isReady && !!adminKey,
   });
 
   const statusMutation = useMutation({
