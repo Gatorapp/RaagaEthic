@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { Product } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
-import { assetPath } from "@/lib/utils";
+import { assetPath, DEFAULT_PRODUCT_IMAGE, parseProductList } from "@/lib/utils";
 
 function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
 export default function ProductCard({ product }: { product: Product }) {
-  const images: string[] = JSON.parse(product.images);
+  const images = parseProductList(product.images, [DEFAULT_PRODUCT_IMAGE]);
   const outOfStock = product.stock <= 0;
 
   return (
@@ -22,6 +22,9 @@ export default function ProductCard({ product }: { product: Product }) {
           src={assetPath(images[0])}
           alt={product.name}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={(e) => {
+            e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+          }}
           loading="lazy"
         />
         {outOfStock && (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useTheme } from "@/lib/theme-provider";
 import { useAdmin } from "@/lib/admin-context";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -10,16 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Download, Moon, Sun, Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 
 export default function SettingsTab() {
-  const { theme, toggleTheme } = useTheme();
   const { adminKey } = useAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [busyAction, setBusyAction] = useState<"export" | "import" | null>(null);
+
+  const isJsonFile = (file: File) => {
+    const normalizedName = file.name.toLowerCase();
+    return file.type === "application/json" || normalizedName.endsWith(".json");
+  };
 
   const exportInventory = async () => {
     setBusyAction("export");
@@ -59,6 +62,10 @@ export default function SettingsTab() {
   const importInventory = async (file: File) => {
     setBusyAction("import");
     try {
+      if (!isJsonFile(file)) {
+        throw new Error("Inventory import only accepts .json files. Use Upload JPEG/PNG inside Add Product for images.");
+      }
+
       const text = await file.text();
       const parsed = JSON.parse(text) as { products?: unknown[] };
       const products = parsed?.products;
@@ -99,26 +106,14 @@ export default function SettingsTab() {
       <h2 className="font-serif text-xl">Settings</h2>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Appearance</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Current theme: <span className="font-medium text-foreground">{theme === "dark" ? "Dark" : "Light"}</span>
-          </p>
-          <Button onClick={toggleTheme} variant="outline" className="gap-2" data-testid="button-settings-theme-toggle">
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            Switch to {theme === "dark" ? "Light" : "Dark"} Mode
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle className="text-base">Inventory Transfer</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Export products from this store as JSON, then import into another environment.
+            Export products from this store as JSON, then import that JSON into another environment.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Product images are uploaded from the Add Product popup, not from this import button.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -139,12 +134,12 @@ export default function SettingsTab() {
               data-testid="button-settings-import-inventory"
             >
               <Upload className="h-4 w-4" />
-              {busyAction === "import" ? "Importing..." : "Import Inventory"}
+              {busyAction === "import" ? "Importing..." : "Import Inventory JSON"}
             </Button>
             <input
               ref={fileInputRef}
               type="file"
-              accept="application/json"
+              accept="application/json,.json"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];

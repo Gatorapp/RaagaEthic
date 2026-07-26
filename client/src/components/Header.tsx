@@ -2,17 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBag, Moon, Sun, Menu, X } from "lucide-react";
+import { ShoppingBag, Menu, X } from "lucide-react";
 import { useState } from "react";
 import Logo from "./Logo";
 import { useCart } from "@/lib/cart-context";
-import { useTheme } from "@/lib/theme-provider";
 import { CATEGORIES } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 
 export default function Header() {
   const { count } = useCart();
-  const { theme, toggleTheme } = useTheme();
   const location = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -48,15 +46,6 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            data-testid="button-theme-toggle"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
           <Link href="/cart" data-testid="link-cart">
             <Button variant="ghost" size="icon" className="relative" aria-label="Cart">
               <ShoppingBag className="h-4 w-4" />

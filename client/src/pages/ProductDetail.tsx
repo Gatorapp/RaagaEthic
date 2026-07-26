@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
-import { assetPath } from "@/lib/utils";
+import { assetPath, DEFAULT_PRODUCT_IMAGE, parseProductList } from "@/lib/utils";
 import { Minus, Plus, ShoppingBag, ChevronLeft } from "lucide-react";
 
 function formatPrice(cents: number) {
@@ -58,8 +58,8 @@ export default function ProductDetail() {
     );
   }
 
-  const images: string[] = JSON.parse(product.images);
-  const sizes: string[] = JSON.parse(product.sizes);
+  const images = parseProductList(product.images, [DEFAULT_PRODUCT_IMAGE]);
+  const sizes = parseProductList(product.sizes, ["One Size"]);
   const outOfStock = product.stock <= 0;
   const selectedSize = size || sizes[0] || "";
 
@@ -84,6 +84,9 @@ export default function ProductDetail() {
               src={assetPath(images[activeImage] || images[0])}
               alt={product.name}
               className="h-full w-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+              }}
               data-testid="img-product-main"
             />
             {outOfStock && (
@@ -103,7 +106,14 @@ export default function ProductDetail() {
                   }`}
                   data-testid={`button-thumbnail-${i}`}
                 >
-                  <img src={assetPath(img)} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={assetPath(img)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                    }}
+                  />
                 </button>
               ))}
             </div>
