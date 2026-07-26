@@ -39,6 +39,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -76,6 +77,29 @@ function slugify(name: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function getSaveErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : "";
+
+  if (message.includes("products.sku")) {
+    return {
+      field: "sku" as const,
+      message: "This SKU already exists. Use a different unique code like RAAGA-NEW-019.",
+    };
+  }
+
+  if (message.includes("products.slug")) {
+    return {
+      field: "slug" as const,
+      message: "This slug already exists. Change the product name or edit the slug.",
+    };
+  }
+
+  return {
+    field: null,
+    message: message || "Could not save product",
+  };
 }
 
 function productToFormValues(p: Product): ProductFormValues {
@@ -162,6 +186,7 @@ export default function ProductsTab() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
+      form.clearErrors(["sku", "slug"]);
       const payload = {
         name: values.name,
         slug: values.slug,
@@ -191,9 +216,15 @@ export default function ProductsTab() {
       setDialogOpen(false);
     },
     onError: (e: any) => {
+      const saveError = getSaveErrorMessage(e);
+
+      if (saveError.field) {
+        form.setError(saveError.field, { type: "server", message: saveError.message });
+      }
+
       toast({
         title: "Could not save product",
-        description: (e?.message || "").replace(/^\d+:\s*/, ""),
+        description: saveError.message,
         variant: "destructive",
       });
     },
@@ -343,6 +374,7 @@ export default function ProductsTab() {
                       <FormControl>
                         <Input {...field} data-testid="input-product-slug" />
                       </FormControl>
+                      <FormDescription>Used in the product URL. It must be unique.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -494,6 +526,7 @@ export default function ProductsTab() {
                     <FormControl>
                       <Input {...field} data-testid="input-product-sku" />
                     </FormControl>
+                    <FormDescription>Use a unique inventory code, for example RAAGA-NEW-019.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
