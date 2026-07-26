@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 
 type Theme = "light" | "dark";
 
@@ -10,6 +11,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
@@ -24,9 +26,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    const isAdminRoute = pathname?.startsWith("/admin");
+    document.documentElement.classList.toggle("dark", Boolean(isAdminRoute && theme === "dark"));
     window.localStorage.setItem("raaga_theme", theme);
-  }, [theme]);
+  }, [theme, pathname]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 

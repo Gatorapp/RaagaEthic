@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/theme-provider";
 import { useAdmin } from "@/lib/admin-context";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ export default function SettingsTab() {
   const { theme, toggleTheme } = useTheme();
   const { adminKey } = useAdmin();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [busyAction, setBusyAction] = useState<"export" | "import" | null>(null);
@@ -69,6 +71,9 @@ export default function SettingsTab() {
         { "x-admin-key": adminKey || "" },
       );
       const result = await res.json();
+
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
 
       toast({
         title: "Inventory imported",

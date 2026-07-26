@@ -70,8 +70,8 @@ export default function AdminDashboard() {
         </h1>
         <Tabs defaultValue="products">
           <TabsList>
-            <TabsTrigger value="products" data-testid="tab-products">
-              Products
+            <TabsTrigger value="products" data-testid="tab-inventory">
+              Inventory
             </TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">
               Orders

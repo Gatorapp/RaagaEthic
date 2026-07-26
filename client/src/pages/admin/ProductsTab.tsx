@@ -229,7 +229,7 @@ export default function ProductsTab() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-serif text-xl">Products</h2>
+        <h2 className="font-serif text-xl">Inventory</h2>
         <Button onClick={openCreate} className="gap-1.5" data-testid="button-add-product">
           <Plus className="h-4 w-4" /> Add Product
         </Button>
