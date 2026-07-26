@@ -99,6 +99,83 @@ export class DatabaseStorage {
       .map((row: any) => productRow(row)!);
   }
 
+  async exportProducts() {
+    return sqlite.prepare(productSelect + " ORDER BY id ASC").all().map((row: any) => ({
+      name: row.name,
+      slug: row.slug,
+      category: row.category,
+      description: row.description,
+      price: row.price,
+      compareAtPrice: row.compareAtPrice,
+      images: row.images,
+      sizes: row.sizes,
+      color: row.color,
+      fabric: row.fabric,
+      sku: row.sku,
+      stock: row.stock,
+      featured: Boolean(row.featured),
+      active: Boolean(row.active),
+    })) as InsertProduct[];
+  }
+
+  async importProducts(
+    items: InsertProduct[],
+    options?: { replaceExisting?: boolean },
+  ): Promise<{ imported: number; replacedAll: boolean }> {
+    const replaceExisting = Boolean(options?.replaceExisting);
+    const upsert = sqlite.prepare(`
+      INSERT INTO products (
+        name, slug, category, description, price, compare_at_price,
+        images, sizes, color, fabric, sku, stock, featured, active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(slug) DO UPDATE SET
+        name = excluded.name,
+        category = excluded.category,
+        description = excluded.description,
+        price = excluded.price,
+        compare_at_price = excluded.compare_at_price,
+        images = excluded.images,
+        sizes = excluded.sizes,
+        color = excluded.color,
+        fabric = excluded.fabric,
+        sku = excluded.sku,
+        stock = excluded.stock,
+        featured = excluded.featured,
+        active = excluded.active
+    `);
+
+    sqlite.exec("BEGIN");
+    try {
+      if (replaceExisting) {
+        sqlite.prepare("DELETE FROM products").run();
+      }
+
+      for (const item of items) {
+        upsert.run(
+          item.name,
+          item.slug,
+          item.category,
+          item.description,
+          item.price,
+          item.compareAtPrice ?? null,
+          item.images,
+          item.sizes,
+          item.color,
+          item.fabric,
+          item.sku,
+          item.stock,
+          Number(item.featured),
+          Number(item.active),
+        );
+      }
+      sqlite.exec("COMMIT");
+      return { imported: items.length, replacedAll: replaceExisting };
+    } catch (error) {
+      sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   async getProduct(id: number) {
     return productRow(sqlite.prepare(`${productSelect} WHERE id = ?`).get(id));
   }
