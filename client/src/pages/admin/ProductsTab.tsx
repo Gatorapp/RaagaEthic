@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -46,7 +46,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ImageUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 const productFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -125,6 +125,7 @@ export default function ProductsTab() {
   const { adminKey, isReady } = useAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
@@ -237,6 +238,39 @@ export default function ProductsTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({ title: "Product deleted" });
+    },
+  });
+
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+
+      const res = await fetch("/api/admin/products/upload", {
+        method: "POST",
+        headers: { "x-admin-key": adminKey || "" },
+        body,
+      });
+
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(text || "Could not upload image");
+      }
+
+      return JSON.parse(text) as { path: string };
+    },
+    onSuccess: ({ path }) => {
+      const currentImages = form.getValues("images").trim();
+      const nextImages = currentImages ? `${currentImages}, ${path}` : path;
+      form.setValue("images", nextImages, { shouldDirty: true, shouldValidate: true });
+      toast({ title: "Image uploaded", description: "Image path added to the product." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Image upload failed",
+        description: error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : "Could not upload image",
+        variant: "destructive",
+      });
     },
   });
 
@@ -467,9 +501,36 @@ export default function ProductsTab() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Image URLs (comma separated)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="/products/lehenga-1.png" {...field} data-testid="input-product-images" />
-                    </FormControl>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <FormControl>
+                        <Input placeholder="/products/lehenga-1.png" {...field} data-testid="input-product-images" />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadImageMutation.isPending}
+                        data-testid="button-upload-product-image"
+                      >
+                        <ImageUp className="h-4 w-4" />
+                        {uploadImageMutation.isPending ? "Uploading..." : "Upload JPEG/PNG"}
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            void uploadImageMutation.mutate(file);
+                          }
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </div>
+                    <FormDescription>Upload a JPEG/PNG/WebP image or paste existing product paths.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

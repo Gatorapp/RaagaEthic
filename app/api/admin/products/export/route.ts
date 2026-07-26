@@ -13,9 +13,13 @@ export async function GET(request: Request) {
     products,
   };
 
-  return NextResponse.json(payload, {
+  const fileName = `inventory-${new Date().toISOString().slice(0, 10)}.json`;
+
+  return new NextResponse(JSON.stringify(payload, null, 2), {
     headers: {
-      "content-disposition": `attachment; filename=inventory-${Date.now()}.json`,
+      "content-type": "application/json; charset=utf-8",
+      "content-disposition": `attachment; filename=${fileName}`,
+      "cache-control": "no-store",
     },
   });
 }

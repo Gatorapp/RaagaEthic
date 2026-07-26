@@ -28,14 +28,17 @@ export default function SettingsTab() {
         headers: { "x-admin-key": adminKey || "" },
       });
       if (!res.ok) {
-        throw new Error((await res.text()) || "Export failed");
+        const message = (await res.text()).replace(/^\d+:\s*/, "");
+        throw new Error(message || "Export failed");
       }
 
       const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const fileName = disposition.match(/filename=([^;]+)/)?.[1] || `inventory-${new Date().toISOString().slice(0, 10)}.json`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `inventory-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = fileName.replace(/(^\"|\"$)/g, "");
       document.body.appendChild(a);
       a.click();
       a.remove();
