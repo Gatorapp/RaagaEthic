@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  const verifiedItems = [];
   for (const item of data.items) {
     const product = await storage.getProduct(item.productId);
     if (!product || !product.active) {
@@ -28,9 +29,25 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const allowedSizes = JSON.parse(product.sizes) as string[];
+    if (!allowedSizes.includes(item.size)) {
+      return NextResponse.json(
+        { message: `Invalid size selected for ${product.name}` },
+        { status: 400 },
+      );
+    }
+    const productImages = JSON.parse(product.images) as string[];
+    verifiedItems.push({
+      productId: product.id,
+      name: product.name,
+      image: productImages[0] || "",
+      price: product.price,
+      size: item.size,
+      qty: item.qty,
+    });
   }
 
-  const subtotal = data.items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = verifiedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
   const shipping = subtotal >= 15000 ? 0 : 999;
   const total = subtotal + shipping;
   const order = await storage.createOrder({
@@ -44,7 +61,7 @@ export async function POST(request: Request) {
     state: data.state,
     zip: data.zip,
     country: data.country,
-    items: JSON.stringify(data.items),
+    items: JSON.stringify(verifiedItems),
     subtotal,
     shipping,
     total,
@@ -65,11 +82,12 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
   try {
     const session = await createCheckoutSession({
-      lineItems: data.items.map((item) => ({
+      lineItems: verifiedItems.map((item) => ({
         name: `${item.name} (${item.size})`,
-        images: item.image
-          ? [new URL(item.image, origin).toString()]
-          : [],
+        images:
+          item.image && !item.image.startsWith("data:")
+            ? [new URL(item.image, origin).toString()]
+            : [],
         amount: item.price,
         qty: item.qty,
       })),

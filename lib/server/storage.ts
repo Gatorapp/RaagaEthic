@@ -1,9 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
 import type { InsertOrder, InsertProduct, Order, Product } from "@shared/schema";
+import { NeonStorage } from "./neon-storage";
 
-const sqlite = new DatabaseSync("data.db");
-sqlite.exec("PRAGMA journal_mode = WAL");
-sqlite.exec(`
+let sqliteInstance: DatabaseSync | undefined;
+
+function localDatabase(): DatabaseSync {
+  if (sqliteInstance) return sqliteInstance;
+
+  const database = new DatabaseSync("data.db");
+  database.exec("PRAGMA busy_timeout = 5000");
+  database.exec(`
 CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -42,6 +48,9 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TEXT NOT NULL
 );
 `);
+  sqliteInstance = database;
+  return database;
+}
 
 const productSelect = `
   SELECT id, name, slug, category, description, price,
@@ -93,14 +102,14 @@ export class DatabaseStorage {
       values.push(options.category);
     }
     const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
-    return sqlite
+    return localDatabase()
       .prepare(`${productSelect}${where} ORDER BY id DESC`)
       .all(...values)
       .map((row: any) => productRow(row)!);
   }
 
   async exportProducts() {
-    return sqlite.prepare(productSelect + " ORDER BY id ASC").all().map((row: any) => ({
+    return localDatabase().prepare(productSelect + " ORDER BY id ASC").all().map((row: any) => ({
       name: row.name,
       slug: row.slug,
       category: row.category,
@@ -123,7 +132,7 @@ export class DatabaseStorage {
     options?: { replaceExisting?: boolean },
   ): Promise<{ imported: number; replacedAll: boolean }> {
     const replaceExisting = Boolean(options?.replaceExisting);
-    const upsert = sqlite.prepare(`
+    const upsert = localDatabase().prepare(`
       INSERT INTO products (
         name, slug, category, description, price, compare_at_price,
         images, sizes, color, fabric, sku, stock, featured, active
@@ -144,10 +153,10 @@ export class DatabaseStorage {
         active = excluded.active
     `);
 
-    sqlite.exec("BEGIN");
+    localDatabase().exec("BEGIN");
     try {
       if (replaceExisting) {
-        sqlite.prepare("DELETE FROM products").run();
+        localDatabase().prepare("DELETE FROM products").run();
       }
 
       for (const item of items) {
@@ -168,20 +177,20 @@ export class DatabaseStorage {
           Number(item.active),
         );
       }
-      sqlite.exec("COMMIT");
+      localDatabase().exec("COMMIT");
       return { imported: items.length, replacedAll: replaceExisting };
     } catch (error) {
-      sqlite.exec("ROLLBACK");
+      localDatabase().exec("ROLLBACK");
       throw error;
     }
   }
 
   async getProduct(id: number) {
-    return productRow(sqlite.prepare(`${productSelect} WHERE id = ?`).get(id));
+    return productRow(localDatabase().prepare(`${productSelect} WHERE id = ?`).get(id));
   }
 
   async getProductBySlug(slug: string) {
-    return productRow(sqlite.prepare(`${productSelect} WHERE slug = ?`).get(slug));
+    return productRow(localDatabase().prepare(`${productSelect} WHERE slug = ?`).get(slug));
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
@@ -190,7 +199,7 @@ export class DatabaseStorage {
       return typeof value === "boolean" ? Number(value) : value ?? null;
     });
     const columns = Object.values(productColumns);
-    const result = sqlite
+    const result = localDatabase()
       .prepare(`INSERT INTO products (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`)
       .run(...values);
     return (await this.getProduct(Number(result.lastInsertRowid)))!;
@@ -203,34 +212,34 @@ export class DatabaseStorage {
     const values = entries.map(([, value]) =>
       typeof value === "boolean" ? Number(value) : value ?? null,
     );
-    sqlite.prepare(`UPDATE products SET ${setters.join(", ")} WHERE id = ?`).run(...values, id);
+    localDatabase().prepare(`UPDATE products SET ${setters.join(", ")} WHERE id = ?`).run(...values, id);
     return this.getProduct(id);
   }
 
   async deleteProduct(id: number) {
-    return sqlite.prepare("DELETE FROM products WHERE id = ?").run(id).changes > 0;
+    return localDatabase().prepare("DELETE FROM products WHERE id = ?").run(id).changes > 0;
   }
 
   async decrementStock(id: number, quantity: number) {
-    sqlite
+    localDatabase()
       .prepare("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?")
       .run(quantity, id);
   }
 
   async listOrders(): Promise<Order[]> {
-    return sqlite
+    return localDatabase()
       .prepare(`${orderSelect} ORDER BY id DESC`)
       .all()
       .map((row: any) => orderRow(row)!);
   }
 
   async getOrder(id: number) {
-    return orderRow(sqlite.prepare(`${orderSelect} WHERE id = ?`).get(id));
+    return orderRow(localDatabase().prepare(`${orderSelect} WHERE id = ?`).get(id));
   }
 
   async getOrderByStripeSessionId(sessionId: string) {
     return orderRow(
-      sqlite.prepare(`${orderSelect} WHERE stripe_session_id = ?`).get(sessionId),
+      localDatabase().prepare(`${orderSelect} WHERE stripe_session_id = ?`).get(sessionId),
     );
   }
 
@@ -241,7 +250,7 @@ export class DatabaseStorage {
       createdAt: string;
     },
   ): Promise<Order> {
-    const result = sqlite
+    const result = localDatabase()
       .prepare(`
         INSERT INTO orders (
           order_number, customer_name, email, phone, address_line1, address_line2,
@@ -271,15 +280,17 @@ export class DatabaseStorage {
   }
 
   async updateOrderStatus(id: number, status: string) {
-    sqlite.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
+    localDatabase().prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
     return this.getOrder(id);
   }
 
   async setOrderStripeSession(id: number, sessionId: string) {
-    sqlite
+    localDatabase()
       .prepare("UPDATE orders SET stripe_session_id = ? WHERE id = ?")
       .run(sessionId, id);
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = process.env.DATABASE_URL || process.env.POSTGRES_URL
+  ? new NeonStorage()
+  : new DatabaseStorage();

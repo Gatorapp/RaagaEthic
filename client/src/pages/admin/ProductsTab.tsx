@@ -30,6 +30,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -150,6 +160,7 @@ export default function ProductsTab() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Product | null>(null);
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["/api/admin/products"],
@@ -259,7 +270,21 @@ export default function ProductsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Product deleted" });
+      toast({
+        title: "Discontinued product deleted",
+        description: "It has been removed from the storefront and inventory.",
+      });
+      setDeleteCandidate(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete product",
+        description:
+          error instanceof Error
+            ? error.message.replace(/^\d+:\s*/, "")
+            : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -376,11 +401,9 @@ export default function ProductsTab() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => {
-                        if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
-                          deleteMutation.mutate(p.id);
-                        }
-                      }}
+                      onClick={() => setDeleteCandidate(p)}
+                      aria-label={`Delete discontinued product ${p.name}`}
+                      title="Delete discontinued product"
                       data-testid={`button-delete-product-${p.id}`}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -659,6 +682,39 @@ export default function ProductsTab() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(deleteCandidate)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteCandidate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete discontinued product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteCandidate
+                ? `"${deleteCandidate.name}" will be permanently removed from inventory and the storefront.`
+                : "This product will be permanently removed."}
+              {" "}This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Keep Product</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!deleteCandidate || deleteMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (deleteCandidate) deleteMutation.mutate(deleteCandidate.id);
+              }}
+              data-testid="button-confirm-delete-product"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
