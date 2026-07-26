@@ -1,5 +1,3 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { errorResponse, isAdmin, unauthorized } from "@server/api";
 
@@ -10,14 +8,6 @@ const ALLOWED_TYPES = new Map([
   ["image/png", ".png"],
   ["image/webp", ".webp"],
 ]);
-
-function sanitizeFileBaseName(name: string) {
-  return name
-    .replace(/\.[^.]+$/, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "product";
-}
 
 export async function POST(request: Request) {
   if (!isAdmin(request)) return unauthorized();
@@ -39,17 +29,11 @@ export async function POST(request: Request) {
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
-    const baseName = sanitizeFileBaseName(file.name);
-    const fileName = `${baseName}-${Date.now()}${extension}`;
-    const productsDir = path.join(process.cwd(), "public", "products");
-    const destination = path.join(productsDir, fileName);
-
-    await mkdir(productsDir, { recursive: true });
-    await writeFile(destination, bytes);
+    const dataUrl = `data:${file.type};base64,${bytes.toString("base64")}`;
 
     return NextResponse.json({
-      path: `/products/${fileName}`,
-      fileName,
+      path: dataUrl,
+      storage: "inline",
     });
   } catch (error) {
     return errorResponse(error, "Could not upload image");

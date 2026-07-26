@@ -67,6 +67,27 @@ const productFormSchema = z.object({
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
+function splitImageInput(value: string) {
+  const normalized = value.trim();
+  if (!normalized) return [] as string[];
+
+  if (normalized.includes("\n")) {
+    return normalized
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (normalized.startsWith("data:")) {
+    return [normalized];
+  }
+
+  return normalized
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -103,6 +124,7 @@ function getSaveErrorMessage(error: unknown) {
 }
 
 function productToFormValues(p: Product): ProductFormValues {
+  const images = JSON.parse(p.images) as string[];
   return {
     name: p.name,
     slug: p.slug,
@@ -110,7 +132,7 @@ function productToFormValues(p: Product): ProductFormValues {
     description: p.description,
     price: p.price / 100,
     compareAtPrice: p.compareAtPrice ? p.compareAtPrice / 100 : undefined,
-    images: (JSON.parse(p.images) as string[]).join(", "),
+    images: images.join("\n"),
     sizes: (JSON.parse(p.sizes) as string[]).join(", "),
     color: p.color,
     fabric: p.fabric,
@@ -195,7 +217,7 @@ export default function ProductsTab() {
         description: values.description,
         price: Math.round(values.price * 100),
         compareAtPrice: values.compareAtPrice ? Math.round(values.compareAtPrice * 100) : null,
-        images: JSON.stringify(values.images.split(",").map((s) => s.trim()).filter(Boolean)),
+        images: JSON.stringify(splitImageInput(values.images)),
         sizes: JSON.stringify(values.sizes.split(",").map((s) => s.trim()).filter(Boolean)),
         color: values.color,
         fabric: values.fabric,
@@ -261,9 +283,9 @@ export default function ProductsTab() {
     },
     onSuccess: ({ path }) => {
       const currentImages = form.getValues("images").trim();
-      const nextImages = currentImages ? `${currentImages}, ${path}` : path;
+      const nextImages = currentImages ? `${currentImages}\n${path}` : path;
       form.setValue("images", nextImages, { shouldDirty: true, shouldValidate: true });
-      toast({ title: "Image uploaded", description: "Image path added to the product." });
+      toast({ title: "Image uploaded", description: "Image added to the product." });
     },
     onError: (error) => {
       toast({
@@ -500,10 +522,15 @@ export default function ProductsTab() {
                 name="images"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Image URLs (comma separated)</FormLabel>
+                    <FormLabel>Product Images</FormLabel>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <FormControl>
-                        <Input placeholder="/products/lehenga-1.png" {...field} data-testid="input-product-images" />
+                        <Textarea
+                          rows={3}
+                          placeholder="/products/lehenga-1.png"
+                          {...field}
+                          data-testid="input-product-images"
+                        />
                       </FormControl>
                       <Button
                         type="button"
@@ -530,7 +557,7 @@ export default function ProductsTab() {
                         }}
                       />
                     </div>
-                    <FormDescription>Upload a JPEG/PNG/WebP image or paste existing product paths.</FormDescription>
+                    <FormDescription>Upload JPEG/PNG/WebP images or paste one image path per line.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
