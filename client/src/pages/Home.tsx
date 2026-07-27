@@ -15,7 +15,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
   Blouse: "/products/collection-12.jpg",
   Dupatta: "/products/collection-15.jpg",
   Kurtas: "/products/collection-09.jpg",
-  Accessories: "/products/necklace-01.jpg",
+  Accessories: "/products/necklace-1.png",
 };
 
 export default function Home() {
