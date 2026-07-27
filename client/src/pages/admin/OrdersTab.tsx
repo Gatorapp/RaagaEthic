@@ -130,10 +130,26 @@ export default function OrdersTab() {
                       <p>{o.customerName}</p>
                       <p className="text-xs text-muted-foreground">{o.email}</p>
                     </TableCell>
-                    <TableCell className="max-w-[220px]">
-                      <p className="truncate text-xs text-muted-foreground">
-                        {items.map((i) => `${i.name} (${i.size}) x${i.qty}`).join(", ")}
-                      </p>
+                    <TableCell className="min-w-[240px]">
+                      <div className="space-y-1.5">
+                        {items.map((item, index) => (
+                          <div
+                            key={`${item.productId}-${item.size}-${index}`}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
+                            <span className="min-w-0 truncate text-muted-foreground">
+                              {item.name} ({item.size})
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className="shrink-0"
+                              data-testid={`text-order-item-quantity-${o.id}-${index}`}
+                            >
+                              Qty: {item.qty}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
                     </TableCell>
                     <TableCell>{formatPrice(o.total)}</TableCell>
                     <TableCell>
