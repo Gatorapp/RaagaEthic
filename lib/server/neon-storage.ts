@@ -347,6 +347,12 @@ export class NeonStorage {
     return this.getOrder(id);
   }
 
+  async deleteOrder(id: number) {
+    await this.ensureReady();
+    const rows = await queryRows("DELETE FROM orders WHERE id = $1 RETURNING id", [id]);
+    return rows.length > 0;
+  }
+
   async setOrderStripeSession(id: number, sessionId: string) {
     await this.ensureReady();
     await queryRows("UPDATE orders SET stripe_session_id = $1 WHERE id = $2", [sessionId, id]);

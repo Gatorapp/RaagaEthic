@@ -17,3 +17,14 @@ export async function PATCH(
     ? NextResponse.json(order)
     : NextResponse.json({ message: "Order not found" }, { status: 404 });
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!isAdmin(request)) return unauthorized();
+  const deleted = await storage.deleteOrder(Number((await params).id));
+  return deleted
+    ? NextResponse.json({ success: true })
+    : NextResponse.json({ message: "Order not found" }, { status: 404 });
+}

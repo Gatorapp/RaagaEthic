@@ -284,6 +284,10 @@ export class DatabaseStorage {
     return this.getOrder(id);
   }
 
+  async deleteOrder(id: number) {
+    return localDatabase().prepare("DELETE FROM orders WHERE id = ?").run(id).changes > 0;
+  }
+
   async setOrderStripeSession(id: number, sessionId: string) {
     localDatabase()
       .prepare("UPDATE orders SET stripe_session_id = ? WHERE id = ?")

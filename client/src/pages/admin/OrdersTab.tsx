@@ -1,9 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import type { Order, OrderItem } from "@shared/schema";
 import { useAdmin } from "@/lib/admin-context";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -20,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 
 function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -36,6 +49,7 @@ export default function OrdersTab() {
   const { adminKey, isReady } = useAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [deleteCandidate, setDeleteCandidate] = useState<Order | null>(null);
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ["/api/admin/orders"],
@@ -52,6 +66,25 @@ export default function OrdersTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] });
       toast({ title: "Order status updated" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) =>
+      apiRequest("DELETE", `/api/admin/orders/${id}`, undefined, {
+        "x-admin-key": adminKey || "",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] });
+      setDeleteCandidate(null);
+      toast({ title: "Order deleted" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Could not delete order",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -123,6 +156,16 @@ export default function OrdersTab() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="h-8 w-8"
+                          onClick={() => setDeleteCandidate(o)}
+                          aria-label={`Delete order ${o.orderNumber}`}
+                          data-testid={`button-delete-order-${o.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -135,6 +178,39 @@ export default function OrdersTab() {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog
+        open={Boolean(deleteCandidate)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteCandidate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteCandidate
+                ? `Order ${deleteCandidate.orderNumber} will permanently disappear from the backend.`
+                : "This order will be permanently deleted."}
+              {" "}This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Keep Order</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!deleteCandidate || deleteMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (deleteCandidate) deleteMutation.mutate(deleteCandidate.id);
+              }}
+              data-testid="button-confirm-delete-order"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
