@@ -7,6 +7,7 @@ import type { Product } from "@shared/schema";
 import { CATEGORIES } from "@shared/schema";
 import { useAdmin } from "@/lib/admin-context";
 import { apiRequest } from "@/lib/queryClient";
+import { assetPath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,26 +57,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { ImageUp, Pencil, Plus, Trash2 } from "lucide-react";
-
-const productFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, hyphens only"),
-  category: z.enum(CATEGORIES),
-  description: z.string().min(1, "Description is required"),
-  price: z.coerce.number().min(0.01, "Price must be greater than 0"),
-  compareAtPrice: z.coerce.number().optional(),
-  images: z.string().min(1, "At least one image URL is required"),
-  sizes: z.string().min(1, "At least one size is required"),
-  color: z.string().min(1, "Color is required"),
-  fabric: z.string().min(1, "Fabric is required"),
-  sku: z.string().min(1, "SKU is required"),
-  stock: z.coerce.number().min(0, "Stock can't be negative"),
-  featured: z.boolean().default(false),
-  active: z.boolean().default(true),
-});
-
-type ProductFormValues = z.infer<typeof productFormSchema>;
+import { ImageUp, Pencil, Plus, Trash2, X } from "lucide-react";
 
 function splitImageInput(value: string) {
   const normalized = value.trim();
@@ -97,6 +79,28 @@ function splitImageInput(value: string) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+
+const productFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, hyphens only"),
+  category: z.enum(CATEGORIES),
+  description: z.string().min(1, "Description is required"),
+  price: z.coerce.number().min(0.01, "Price must be greater than 0"),
+  compareAtPrice: z.coerce.number().optional(),
+  images: z
+    .string()
+    .min(1, "At least one image URL is required")
+    .refine((value) => splitImageInput(value).length <= 3, "Add no more than 3 images"),
+  sizes: z.string().min(1, "At least one size is required"),
+  color: z.string().min(1, "Color is required"),
+  fabric: z.string().min(1, "Fabric is required"),
+  sku: z.string().min(1, "SKU is required"),
+  stock: z.coerce.number().min(0, "Stock can't be negative"),
+  featured: z.boolean().default(false),
+  active: z.boolean().default(true),
+});
+
+type ProductFormValues = z.infer<typeof productFormSchema>;
 
 function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -543,47 +547,92 @@ export default function ProductsTab() {
               <FormField
                 control={form.control}
                 name="images"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Images</FormLabel>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <FormControl>
-                        <Textarea
-                          rows={3}
-                          placeholder="/products/lehenga-1.png"
-                          {...field}
-                          data-testid="input-product-images"
+                render={({ field }) => {
+                  const previewImages = splitImageInput(field.value || "");
+
+                  return (
+                    <FormItem>
+                      <FormLabel>Product Images</FormLabel>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <FormControl>
+                          <Textarea
+                            rows={3}
+                            placeholder="/products/lehenga-1.png"
+                            {...field}
+                            data-testid="input-product-images"
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadImageMutation.isPending || previewImages.length >= 3}
+                          data-testid="button-upload-product-image"
+                        >
+                          <ImageUp className="h-4 w-4" />
+                          {uploadImageMutation.isPending ? "Uploading..." : "Upload JPEG/PNG"}
+                        </Button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && previewImages.length < 3) {
+                              void uploadImageMutation.mutate(file);
+                            }
+                            e.currentTarget.value = "";
+                          }}
                         />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="gap-2"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadImageMutation.isPending}
-                        data-testid="button-upload-product-image"
-                      >
-                        <ImageUp className="h-4 w-4" />
-                        {uploadImageMutation.isPending ? "Uploading..." : "Upload JPEG/PNG"}
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            void uploadImageMutation.mutate(file);
-                          }
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                    </div>
-                    <FormDescription>Upload JPEG/PNG/WebP images or paste one image path per line.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                      </div>
+                      <FormDescription>
+                        Add up to 3 JPEG/PNG/WebP images or paste one image path per line. The first image is the main product picture.
+                      </FormDescription>
+
+                      {previewImages.length > 0 && (
+                        <div
+                          className="grid grid-cols-2 gap-3 rounded-md border bg-muted/30 p-3 sm:grid-cols-3"
+                          data-testid="product-image-previews"
+                        >
+                          {previewImages.slice(0, 3).map((image, index) => (
+                            <div key={`${image}-${index}`} className="space-y-2">
+                              <div className="relative aspect-[3/4] overflow-hidden rounded-md border bg-background">
+                                <img
+                                  src={assetPath(image)}
+                                  alt={`Product preview ${index + 1}`}
+                                  className="h-full w-full object-cover"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="icon"
+                                  className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full"
+                                  aria-label={`Remove product image ${index + 1}`}
+                                  onClick={() => {
+                                    const nextImages = previewImages.filter((_, imageIndex) => imageIndex !== index);
+                                    form.setValue("images", nextImages.join("\n"), {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <p className="text-center text-xs text-muted-foreground">
+                                {index === 0 ? "Main image" : `Image ${index + 1}`}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <div className="grid gap-4 sm:grid-cols-3">
